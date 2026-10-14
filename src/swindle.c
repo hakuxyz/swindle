@@ -409,6 +409,7 @@ static void clientfx_apply(Client *c);
 static void clientfx_reapply_all(void);
 static void clientfx_fade_cancel(Client *c);
 #endif
+static void cursor_apply(int initial);
 static void toggletag(const Arg *arg);
 static void toggleview(const Arg *arg);
 static void unlocksession(struct wl_listener *listener, void *data);
@@ -1257,6 +1258,10 @@ createmon(struct wl_listener *listener, void *data)
 				strncpy(m->ltsymbol, m->lt[m->sellt]->symbol, LENGTH(m->ltsymbol));
 				wlr_output_state_set_scale(&state, r->scale);
 				wlr_output_state_set_transform(&state, r->transform);
+				/* Sharp cursors on HiDPI: preload this output's scale
+				 * into the (possibly just reloaded) theme. */
+				if (cursor_mgr)
+					wlr_xcursor_manager_load(cursor_mgr, r->scale);
 				break;
 			}
 		}
@@ -3070,12 +3075,49 @@ on_config_reload(const Config *newcfg, void *ud)
 	(void)ud;
 	cfg = *newcfg;
 	keyboard_reload_keymap();
+	cursor_apply(0);
 #ifdef SCENEFX
 	clientfx_reapply_all();
 #endif
 	wl_list_for_each(m, &mons, link)
 		arrange(m);
 	printstatus();
+}
+
+/* (Re)creates the xcursor manager from cfg.cursor. wlroots is lenient
+ * about unknown theme names (it falls back internally), so this cannot
+ * fail in a way worth dying over: worst case the cursor looks default.
+ * Called with initial=1 from setup(). */
+static void
+cursor_apply(int initial)
+{
+	const char *theme = cfg.cursor.theme[0] ? cfg.cursor.theme : NULL;
+	int size = cfg.cursor.size >= 8 ? cfg.cursor.size : 24;
+	struct wlr_xcursor_manager *mgr = wlr_xcursor_manager_create(theme, size);
+
+	if (!mgr) {
+		fprintf(stderr, "swindle: couldn't create xcursor manager (%s), "
+		        "cursor stays as-is\n", theme ? theme : "default");
+		return;
+	}
+	/* Load the base scale now so a typo surfaces here in the log
+	 * instead of as an invisible cursor later. Per-output scales
+	 * are (re)loaded in createmon for HiDPI. */
+	if (!wlr_xcursor_manager_load(mgr, 1))
+		fprintf(stderr, "swindle: xcursor theme '%s' didn't load at "
+		        "scale 1, carrying on anyway\n", theme ? theme : "default");
+	if (!initial && cursor_mgr)
+		wlr_xcursor_manager_destroy(cursor_mgr);
+	cursor_mgr = mgr;
+
+	char buf[16];
+	snprintf(buf, sizeof(buf), "%d", size);
+	setenv("XCURSOR_SIZE", buf, 1);
+	if (theme)
+		setenv("XCURSOR_THEME", theme, 1);
+	else
+		unsetenv("XCURSOR_THEME");
+	wlr_cursor_set_xcursor(cursor, cursor_mgr, "default");
 }
 
 void
@@ -3273,8 +3315,7 @@ setup(void)
 	 * Xcursor themes to source cursor images from and makes sure that cursor
 	 * images are available at all scale factors on the screen (necessary for
 	 * HiDPI support). Scaled cursors will be loaded with each output. */
-	cursor_mgr = wlr_xcursor_manager_create(NULL, 24);
-	setenv("XCURSOR_SIZE", "24", 1);
+	cursor_apply(1);
 
 	/*
 	 * wlr_cursor *only* displays an image on screen. It does not move around

@@ -28,6 +28,8 @@ want to run Hyprland. Honest status report:
   finally disagree in peace.
 * **Keyboard layout in the config.** `layout`, `variant`, `options`,
   `model`, applied live.
+* **Cursor theme and size in the config.** Hot-reloads, HiDPI-aware,
+  typo-proof.
 * **Sane config lookup.** `-c` flag first, then your user config, then a
   system fallback. More on that below.
 * **An IPC client called `smsg`** (see `smsg/README.md`) for status bars
@@ -212,6 +214,20 @@ This one hot-reloads, so no restart dance for layout tweaks. If a layout
 fails to compile, swindle keeps the old keymap and complains in the log.
 (The older `input.xkb_layout` / `xkb_variant` / `xkb_options` /
 `xkb_model` spellings still work.)
+
+### cursor
+
+```lua
+cursor = {
+    theme = "Breeze_Light", -- empty means system default, see /usr/share/icons
+    size  = 24,             -- px, 8-128
+}
+```
+
+Hot-reloads, and a bad theme can never kill your session: wlroots falls
+back internally and swindle logs it. The theme is also exported as
+`XCURSOR_THEME` / `XCURSOR_SIZE` for XWayland clients, and preloaded per
+output scale for sharp HiDPI cursors.
 
 ### rules
 

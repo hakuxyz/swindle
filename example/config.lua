@@ -59,6 +59,13 @@ keyboard = {
     model   = "",
 }
 
+-- Cursor theme and size. Hot-reloads. Empty theme = system default.
+-- Run `ls /usr/share/icons` to see installed themes.
+cursor = {
+    theme = "",
+    size  = 24,
+}
+
 rules = {
 --   { app_id = "Gimp",    floating = true,  monitor = -1 },
 --   { app_id = "firefox", tags = 1 << 8,    floating = false, monitor = -1 },

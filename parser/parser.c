@@ -392,6 +392,27 @@ parse_keyboard(lua_State *L, CfgKeyboard *kb)
 }
 
 static void
+parse_cursor(lua_State *L, CfgCursor *cc)
+{
+	cc->theme[0] = '\0';
+	cc->size = 24;
+
+	lua_getglobal(L, "cursor");
+	if (!lua_istable(L, -1)) {
+		lua_pop(L, 1);
+		return;
+	}
+	lua_get_string(L, "theme", cc->theme, sizeof(cc->theme));
+	int size = lua_get_int(L, "size", 24);
+	if (size >= 8 && size <= 128)
+		cc->size = size;
+	else
+		fprintf(stderr, "swindle config: cursor.size %d out of range "
+		        "(8-128), using 24\n", size);
+	lua_pop(L, 1);
+}
+
+static void
 parse_animations(lua_State *L, CfgAnimations *a)
 {
 	a->enabled = false;
@@ -793,6 +814,7 @@ config_load(const char *path, Config *cfg)
 	parse_appearance(L, &cfg->appearance);
 	parse_input     (L, &cfg->input);
 	parse_keyboard  (L, &cfg->keyboard);
+	parse_cursor    (L, &cfg->cursor);
 	parse_animations(L, &cfg->animations);
 	parse_rules     (L, cfg);
 	parse_monitors  (L, cfg);

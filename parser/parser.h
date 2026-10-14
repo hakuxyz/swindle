@@ -55,6 +55,13 @@ typedef struct {
 	int    tap_button_map;  /* libinput enum value */
 } CfgInput;
 
+/* Cursor (xcursor theme + size) */
+
+typedef struct {
+	char theme[128];  /* empty = system default theme */
+	int  size;        /* px, fallback 24 */
+} CfgCursor;
+
 /* Keyboard (xkb) */
 
 typedef struct {
@@ -147,6 +154,7 @@ typedef struct {
 	int           log_level; /* WLR_* log level */
 
 	CfgKeyboard   keyboard;
+	CfgCursor     cursor;
 	CfgAnimations animations;
 
 	CfgAutostart  autostart[CFG_MAX_AUTOSTART];
