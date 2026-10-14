@@ -2,54 +2,60 @@
 
 > "It's so bad it's not even funny!" -kantiankant, 2026
 
-Swindle is a fork of [dwl](https://codeberg.org/dwl/dwl) with one goal:
-to feel like the poor man's Hyprland. It has the following:
+Swindle started as a fork of [dwl](https://codeberg.org/dwl/dwl) with a
+simple idea: make something that feels like Hyprland for people who don't
+want to run Hyprland. Honest status report:
 
 * NO cool vfx (yet)
 * only ONE tiling layout (dwindle)
-* Lua configuration with live hot-reload
+* Lua config that actually hot-reloads
 * dwl IPC plus ext-workspace support
 
-> Fun fact: parts of the ext-workspace implementation were taken from
-> [MangoWM](https://github.com/mangowm/mango), hence `licenses/LICENSE.mangowm`.
+> Fun fact: the ext-workspace bits were borrowed from
+> [MangoWM](https://github.com/mangowm/mango), which is why
+> `licenses/LICENSE.mangowm` exists.
 
-## Features
+## What you get
 
-* **Dwindle tiling** — binary-split tree, Hyprland-style, with gaps and
-  smart gaps
-* **Lua config** (`config.lua`) with **hot-reload on save** — appearance,
-  keybinds, keyboard layout and input apply without restarting
-  (`autostart` runs once at startup)
-* **Split touchpad/mouse input** — separate scroll methods and natural
-  scrolling per device class
-* **Configurable keyboard layout** (`layout`, `variant`, `options`, `model`)
-* **Config lookup chain** — `-c` flag, user config, `/etc` fallback
-* **IPC client** (`smsg`, see `smsg/README.md`) for status bars and scripting
-* XWayland support (compile-time toggle)
+* **Dwindle tiling.** A binary-split tree in the Hyprland style, with gaps
+  and optional smart gaps.
+* **Lua config with hot-reload.** Save `config.lua` and appearance,
+  keybinds, keyboard layout and input pick it up without a restart.
+  (Only `autostart` runs once at startup, as the name suggests.)
+* **Touchpad and mouse stay separate.** Different scroll methods and
+  natural scrolling per device class, so your trackpad and your mouse can
+  finally disagree in peace.
+* **Keyboard layout in the config.** `layout`, `variant`, `options`,
+  `model`, applied live.
+* **Sane config lookup.** `-c` flag first, then your user config, then a
+  system fallback. More on that below.
+* **An IPC client called `smsg`** (see `smsg/README.md`) for status bars
+  and little scripts.
+* XWayland support, on by default, removable at compile time.
 
 ## Dependencies
 
 | Library | Notes |
 |---|---|
-| `wlroots-0.20` | compiled with the libinput backend |
-| `wayland` | also provides `wayland-scanner` (build) |
-| `wayland-protocols` | build-time only |
+| `wlroots-0.20` | needs the libinput backend |
+| `wayland` | also ships `wayland-scanner` for the build |
+| `wayland-protocols` | build time only |
 | `libinput` | |
 | `libxkbcommon` | |
-| `lua5.4` | config engine |
-| `libxcb`, `xcb-util-wm` | XWayland support |
-| `pkg-config` | build-time only |
+| `lua5.4` | the config engine |
+| `libxcb`, `xcb-util-wm` | only for XWayland |
+| `pkg-config` | build time only |
 
-Install the matching `-dev`/`-devel` packages if your distro splits them.
+If your distro ships separate `-dev`/`-devel` packages, grab those too.
 
-**CachyOS / Arch** (verified):
+**CachyOS / Arch** (this is tested and works):
 
 ```
 sudo pacman -S base-devel wlroots0.20 wayland wayland-protocols \
   libinput libxkbcommon lua54 libxcb xcb-util-wm pixman libdrm seatd
 ```
 
-**Nix** (flake in-tree):
+**Nix** (there is a flake in the repo):
 
 ```
 nix build
@@ -60,19 +66,19 @@ nix run
 
 ```
 make                        # builds ./swindle and ./smsg/smsg
-sudo make install           # installs to /usr/local/bin, example config to /etc/swindle
+sudo make install           # puts them in /usr/local/bin, example config in /etc/swindle
 sudo make uninstall         # removes both again
 ```
 
-`PREFIX` and `DESTDIR` are respected (`config.mk`), so packaging and
-user-local installs work:
+`PREFIX` and `DESTDIR` in `config.mk` are respected, so packaging or a
+user-local install works fine:
 
 ```
-make PREFIX="$HOME/.local"           # then copy the binaries to ~/.local/bin
+make PREFIX="$HOME/.local"  # then copy the binaries into ~/.local/bin yourself
 ```
 
-> Note: `make install` copies `example/*` to `/etc/swindle/`. Your
-> personal `~/.config/swindle/config.lua` always takes precedence (see below).
+Heads up: `make install` copies `example/*` to `/etc/swindle/`. Your own
+`~/.config/swindle/config.lua` always wins over that file (details below).
 
 ## Running
 
@@ -80,17 +86,17 @@ make PREFIX="$HOME/.local"           # then copy the binaries to ~/.local/bin
 swindle [-v] [-d] [-s startup command] [-c config file]
 ```
 
-| Flag | Meaning |
+| Flag | What it does |
 |---|---|
-| `-c PATH` | use this config file instead of the lookup chain |
+| `-c PATH` | use this config file, skip the lookup chain |
 | `-s CMD` | run one extra startup command |
-| `-d` | debug log level (overrides config) |
-| `-v` | print version and exit |
+| `-d` | debug logging, overrides whatever the config says |
+| `-v` | print the version and exit |
 
-`XDG_RUNTIME_DIR` must be set (systemd normally does this for you).
+You need `XDG_RUNTIME_DIR` set. Systemd usually handles that for you.
 
-* **From a login manager:** install a session file pointing at your binary,
-  e.g. `~/.local/share/wayland-sessions/swindle.desktop`:
+* **From a login manager,** drop in a session file that points at your
+  binary, for example `~/.local/share/wayland-sessions/swindle.desktop`:
 
   ```
   [Desktop Entry]
@@ -100,49 +106,53 @@ swindle [-v] [-d] [-s startup command] [-c config file]
   DesktopNames=swindle;wlroots;
   ```
 
-* **From a TTY:** just run `swindle`. On systemd systems logind handles
-  seats; without logind you need `seatd` running and your user in the
-  `seat`/`video`/`input` groups.
+* **From a TTY,** just run `swindle`. On systemd machines logind takes
+  care of seats. Without logind you want `seatd` running and your user in
+  the `seat`, `video` and `input` groups.
 
 ## Configuration
 
-Start from `example/config.lua` — it documents every option. The lookup
-order (first readable file wins) is:
+Copy `example/config.lua` somewhere and make it yours. It documents every
+option. When swindle starts it looks for a config in this order and takes
+the first readable file it finds:
 
 1. `swindle -c /path/to/config.lua`
-2. `$XDG_CONFIG_HOME/swindle/config.lua` (else `~/.config/swindle/config.lua`)
-3. `/etc/swindle/config.lua` (system fallback)
+2. `$XDG_CONFIG_HOME/swindle/config.lua`, falling back to
+   `~/.config/swindle/config.lua`
+3. `/etc/swindle/config.lua` (the system fallback)
 
-Without any of these, swindle refuses to start. Only `autostart` is
-startup-only; everything else below hot-reloads when you save the file.
+If none of those exist, swindle tells you so and quits. Everything below
+hot-reloads when you save, except `autostart`, which only runs at startup.
 
 ### appearance
 
 ```lua
 appearance = {
     border_px    = 2,          -- shorthand for inner+outer border width
-    gaps         = 10,         -- 0 = no gaps
-    smart_gaps   = false,      -- no gaps when only one window is visible
+    gaps         = 10,         -- 0 means no gaps
+    smart_gaps   = false,      -- no gaps when a single window is visible
     root_color   = 0x222222ff, -- colors are 0xRRGGBBAA
     border_color = 0x00000000, -- unfocused (shorthand for inner+outer)
-    focus_color  = 0xe8e8e8ff, -- focused   (shorthand for inner+outer)
-    urgent_color = 0xff0000ff, -- urgent    (shorthand for inner+outer)
+    focus_color  = 0xe8e8e8ff, -- focused (shorthand for inner+outer)
+    urgent_color = 0xff0000ff, -- urgent (shorthand for inner+outer)
     fullscreen_bg = 0x000000ff,
 }
 ```
 
-Explicit `inner_border_px` / `outer_border_px` and
-`inner_*_color` / `outer_*_color` keys win over the shorthands.
+If you want finer control, the explicit `inner_border_px`,
+`outer_border_px` and `inner_*_color` / `outer_*_color` keys beat the
+shorthands.
 
-### animations (stub)
+### animations (stub for now)
 
 ```lua
 animations = { enabled = false, corner_radius = 0, fade_ms = 0 }
 ```
 
-Parsed for forward compatibility, but inert: real animations wait on an
-[scenefx](https://github.com/wlrfx/scenefx) release compatible with
-wlroots 0.20. Enabling it just logs a note.
+This is parsed so the option exists when the time comes, but right now it
+does nothing. Real animations are waiting on a
+[scenefx](https://github.com/wlrfx/scenefx) release that works with
+wlroots 0.20. Flipping it on just logs a note saying as much.
 
 ### input
 
@@ -151,12 +161,12 @@ input = {
     repeat_rate = 50, repeat_delay = 150,
     tap_to_click = true, tap_and_drag = true, drag_lock = true,
     natural_scrolling = false,          -- fallback for both device classes
-    natural_scrolling_touchpad = nil,   -- true/false, or nil = fallback
+    natural_scrolling_touchpad = nil,   -- true/false, or nil for fallback
     natural_scrolling_mouse    = nil,
     disable_while_typing = true,
     left_handed = false, middle_button_emulation = false,
     scroll_method = "2fg",              -- fallback: "2fg", "edge", "button", "none"
-    scroll_method_touchpad = nil,       -- per-class override, nil = fallback
+    scroll_method_touchpad = nil,       -- per-class override, nil for fallback
     scroll_method_mouse    = nil,
     click_method  = "button_areas",     -- or "clickfinger"
     accel_profile = "adaptive",         -- or "flat"
@@ -166,25 +176,26 @@ input = {
 }
 ```
 
-Touchpads are detected by tap capability; a configured scroll method the
-device doesn't support is skipped with a warning instead of failing.
-Input-device settings apply to newly plugged devices; keyboard repeat
-and layout apply immediately.
+Touchpads are spotted by their tap capability. If you configure a scroll
+method a device does not support, swindle logs a warning and leaves the
+device default alone instead of blowing up. Device settings kick in for
+newly plugged hardware, while keyboard repeat and layout apply instantly.
 
 ### keyboard
 
 ```lua
 keyboard = {
-    layout  = "de",            -- "us", "us,de", ...
+    layout  = "de",            -- "us", "us,de", whatever xkb knows
     variant = "",              -- e.g. "nodeadkeys"
     options = "caps:escape",   -- xkb options
-    model   = "",              -- e.g. "pc105", empty = default
+    model   = "",              -- e.g. "pc105", empty means default
 }
 ```
 
-Hot-reloads. An uncompilable layout keeps the old keymap and logs an error.
-(Legacy `input.xkb_layout` / `xkb_variant` / `xkb_options` / `xkb_model`
-are still honored.)
+This one hot-reloads, so no restart dance for layout tweaks. If a layout
+fails to compile, swindle keeps the old keymap and complains in the log.
+(The older `input.xkb_layout` / `xkb_variant` / `xkb_options` /
+`xkb_model` spellings still work.)
 
 ### rules
 
@@ -195,7 +206,8 @@ rules = {
 }
 ```
 
-`monitor = -1` means current monitor. Empty `rules = {}` is fine.
+`monitor = -1` means the current monitor. An empty `rules = {}` is
+perfectly fine.
 
 ### monitors
 
@@ -207,13 +219,14 @@ monitors = {
 }
 ```
 
-`name = nil` is the catch-all. `x`/`y = -1` means autoconfigure.
-A missing or empty table falls back to the catch-all above.
+`name = nil` catches everything. `x`/`y = -1` means figure it out
+automatically. If the table is missing or empty you get the catch-all
+above.
 
 ### autostart
 
-Commands run **sequentially** once at startup (each gets ~0.5s; daemons
-are detected and skipped over):
+Commands run in order, once, at startup. Each gets about half a second;
+daemons get noticed and skipped over:
 
 ```lua
 autostart = {
@@ -222,7 +235,7 @@ autostart = {
 }
 ```
 
-Use `{}` for nothing. Hot-reload never re-runs autostart.
+Use `{}` for nothing. Saving the config never re-runs autostart.
 
 ### keybinds
 
@@ -233,33 +246,33 @@ keybinds = {
     { mods = {"logo"}, key = "w",     action = "killclient" },
     ...
 }
-for i = 1, 9 do ... end  -- tag keys, see example config
+for i = 1, 9 do ... end  -- tag keys, see the example config
 ```
 
-Modifiers: `shift`, `ctrl`, `alt`, `logo`, `mod2`, `mod3`, `mod5`.
-Keys are XKB keysym names (`"q"`, `"Return"`, `"XF86AudioMute"`…).
+Modifiers are `shift`, `ctrl`, `alt`, `logo`, `mod2`, `mod3`, `mod5`.
+Keys are XKB keysym names like `"q"`, `"Return"` or `"XF86AudioMute"`.
 
 | action | args | description |
 |---|---|---|
 | `spawn` | argv | run a program |
-| `killclient` | – | close focused window |
-| `togglefloating` | – | float/unfloat focused window |
-| `togglefullscreen` | – | fullscreen toggle |
-| `togglegaps` | – | gaps on/off (this monitor) |
-| `togglesmartgaps` | – | smart gaps on/off (global) |
+| `killclient` | | close the focused window |
+| `togglefloating` | | float or unfloat the focused window |
+| `togglefullscreen` | | fullscreen toggle |
+| `togglegaps` | | gaps on or off (this monitor) |
+| `togglesmartgaps` | | smart gaps on or off (global) |
 | `setgaps` | `"+5"` / `"-5"` / `"10"` | relative or absolute gap size |
 | `setmfact` | `"+0.05"` / `"-0.05"` / `"55"` | dwindle root split, relative delta or absolute percent |
-| `zoom` | – | swap focused window with first tiled one |
+| `zoom` | | swap the focused window with the first tiled one |
 | `focusstack` | `"next"` / `"prev"` | cycle focus through tiled windows |
 | `focusdir` / `swapdir` | `"left"`/`"right"`/`"up"`/`"down"` | directional focus / swap |
 | `view` | mask or `"all"` | show tag(s), e.g. `tostring(1 << 0)` |
 | `toggleview` | mask | toggle tag visibility |
-| `tag` / `toggletag` | mask | (un)assign window to tag(s) |
-| `focusmon` / `tagmon` | `"left"` / `"right"` | focus / send to adjacent monitor |
-| `setlayout` | index | `0` = floating, `1` = dwindle |
+| `tag` / `toggletag` | mask | (un)assign a window to tag(s) |
+| `focusmon` / `tagmon` | `"left"` / `"right"` | focus or send to the adjacent monitor |
+| `setlayout` | index | `0` is floating, `1` is dwindle |
 | `moveresize` | `"move"` / `"resize"` | mouse drag action (see buttons) |
 | `chvt` | number | switch virtual terminal |
-| `quit` | – | exit swindle |
+| `quit` | | exit swindle |
 
 ### buttons
 
@@ -273,33 +286,33 @@ buttons = {
 
 ## IPC (`smsg`)
 
-`make` also builds `smsg`, a dwl-IPC client for bars and scripts:
+`make` also builds `smsg`, a little dwl-IPC client for bars and scripts:
 
 ```
-smsg -w            # stream status (dwl-stdout style)
-smsg -w -c         # watch focused appid/title
-smsg -s -t 7       # select tag 8 on current output
-smsg -l '><>'      # switch to floating layout
+smsg -w            # stream status, dwl-stdout style
+smsg -w -c         # watch the focused appid/title
+smsg -s -t 7       # select tag 8 on the current output
+smsg -l '><>'      # switch to the floating layout
 ```
 
-Full usage in [`smsg/README.md`](smsg/README.md).
+The full usage lives in [`smsg/README.md`](smsg/README.md).
 
 ## Troubleshooting
 
-* **`failed to load config (tried '…' and '…')`** — no config found anywhere
-  in the lookup chain. Copy `example/config.lua` to
+* **`failed to load config (tried '…' and '…')`**. No config anywhere in
+  the lookup chain. Copy `example/config.lua` to
   `~/.config/swindle/config.lua` (or pass `-c`).
-* **`XDG_RUNTIME_DIR must be set`** — launch via systemd / login manager,
-  or export it manually (`/run/user/$(id -u)`).
-* **Wrong keyboard layout** — set `keyboard.layout` (e.g. `"de"`); it
+* **`XDG_RUNTIME_DIR must be set`**. Launch through systemd or a login
+  manager, or export it yourself (`/run/user/$(id -u)`).
+* **Wrong keyboard layout.** Set `keyboard.layout` (say `"de"`). It
   hot-reloads, no restart needed.
-* **`Failed to bind socket @/tmp/.X11-unix/X0`** — another X server
-  (e.g. your current desktop session) already owns it. Harmless unless
-  you need XWayland inside swindle; start from a TTY to avoid it.
-* **No bar/launcher** — swindle ships none. Install `waybar` and
-  `wofi`/`rofi` and add them to `autostart`/`keybinds`.
-* **Validate a config without starting:** `luac5.4 -p config.lua`
-  catches syntax errors (not logic errors).
+* **`Failed to bind socket @/tmp/.X11-unix/X0`**. Some other X server
+  (probably your current desktop session) already owns it. Harmless
+  unless you need XWayland inside swindle. Starting from a TTY avoids it.
+* **No bar or launcher.** Swindle ships neither. Install `waybar` and
+  `wofi` or `rofi`, then wire them into `autostart` and `keybinds`.
+* **Sanity-check a config without starting:** `luac5.4 -p config.lua`
+  catches syntax errors (logic errors are still on you).
 
 ## Roadmap
 
@@ -308,28 +321,29 @@ Full usage in [`smsg/README.md`](smsg/README.md).
 - [x] custom config path (`-c`)
 - [x] `/etc/swindle/config.lua` fallback
 - [ ] animations via [scenefx](https://github.com/wlrfx/scenefx) once a
-      wlroots-0.20-compatible release drops (stub is in place)
+      wlroots-0.20-compatible release lands (the stub is ready)
 - [ ] per-monitor wallpaper / output management helpers
 - [ ] docs site (in planning)
 
 ## Contributing
 
-Issues and PRs welcome at <https://github.com/hakuxyz/swindle>.
+Issues and PRs are welcome at <https://github.com/hakuxyz/swindle>.
+A few ground rules:
 
-* C11, `-Wall -Wextra` clean — `make` must stay warning-free.
-* Lua configs must pass `luac5.4 -p`.
-* Keep the config parser backwards compatible: prefer new optional keys
-  with `nil` = old behavior over breaking renames.
-* Small, reviewable commits; one concern per PR.
+* C11 and `-Wall -Wextra` clean. `make` should stay warning-free.
+* Lua configs should pass `luac5.4 -p`.
+* Keep the parser backwards compatible. New optional keys with `nil`
+  meaning old behavior beat breaking renames.
+* Small, reviewable commits, one concern per PR.
 
 ## Credits
 
-* [dwl](https://codeberg.org/dwl/dwl) — the upstream this fork started from
-* [MangoWM](https://github.com/mangowm/mango) — ext-workspace code
+* [dwl](https://codeberg.org/dwl/dwl), the upstream this fork started from
+* [MangoWM](https://github.com/mangowm/mango) for the ext-workspace code
   (see `licenses/`)
-* [dwlmsg](https://codeberg.org/notchoc/dwlmsg) — the base of `smsg`
+* [dwlmsg](https://codeberg.org/notchoc/dwlmsg), the base of `smsg`
 
 ## License
 
-GPLv3 for swindle itself (see `LICENSE`); third-party bits keep their
-own terms — see `licenses/` (`LICENSE.dwl`, `LICENSE.mangowm`, …).
+GPLv3 for swindle itself (see `LICENSE`). Third-party bits keep their own
+terms, collected under `licenses/` (`LICENSE.dwl`, `LICENSE.mangowm`, …).
