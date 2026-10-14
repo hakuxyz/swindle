@@ -396,7 +396,10 @@ parse_animations(lua_State *L, CfgAnimations *a)
 {
 	a->enabled = false;
 	a->corner_radius = 0;
-	a->fade_ms = 0;
+	a->fade_in_ms = 0;
+	a->shadow_enabled = false;
+	a->shadow_blur_sigma = 20.0f;
+	parse_color_hex(0x000000a0, a->shadow_color);
 
 	lua_getglobal(L, "animations");
 	if (!lua_istable(L, -1)) {
@@ -407,15 +410,28 @@ parse_animations(lua_State *L, CfgAnimations *a)
 	a->corner_radius = lua_get_int(L, "corner_radius", 0);
 	if (!a->corner_radius)
 		a->corner_radius = lua_get_int(L, "border_radius", 0);
-	a->fade_ms = lua_get_int(L, "fade_ms", 0);
-	if (!a->fade_ms)
-		a->fade_ms = lua_get_int(L, "duration_ms", 0);
+	a->fade_in_ms = lua_get_int(L, "fade_in_ms", 0);
+	if (!a->fade_in_ms) {
+		/* legacy aliases */
+		a->fade_in_ms = lua_get_int(L, "fade_ms", 0);
+		if (!a->fade_in_ms)
+			a->fade_in_ms = lua_get_int(L, "duration_ms", 0);
+	}
+	a->shadow_enabled = lua_get_bool(L, "shadow_enabled", true);
+	a->shadow_blur_sigma = (float)lua_get_double(L, "shadow_blur_sigma",
+		lua_get_double(L, "shadow_sigma", 20.0));
+	lua_getfield(L, -1, "shadow_color");
+	if (lua_isnumber(L, -1))
+		parse_color_hex((uint32_t)lua_tointeger(L, -1), a->shadow_color);
 	lua_pop(L, 1);
+	lua_pop(L, 1); /* animations table */
 
+#ifndef SCENEFX
 	if (a->enabled)
 		fprintf(stderr, "swindle config: animations.enabled=true, but "
-		        "scenefx is not linked yet (waiting on scenefx 0.5). "
-		        "Parsed and ignored for now.\n");
+		        "this build has no scenefx support (SCENEFX=0). "
+		        "Parsed and ignored.\n");
+#endif
 }
 
 static void

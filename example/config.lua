@@ -15,12 +15,15 @@ appearance = {
     fullscreen_bg = 0x000000ff,
 }
 
--- Animations are parsed but inert until scenefx 0.5 lands
--- (wlroots-0.20 compatible release still pending upstream).
+-- Eye candy. Needs a SCENEFX=1 build (scenefx 0.5, wlroots-0.20).
+-- Plain builds parse this table but ignore it.
 animations = {
-    enabled       = false,
-    corner_radius = 0,
-    fade_ms       = 0,
+    enabled           = false,      -- master switch
+    corner_radius     = 12,         -- rounded window corners in px
+    fade_in_ms        = 150,        -- map fade-in, 0 = instant
+    shadow_enabled    = true,       -- drop shadow behind windows
+    shadow_blur_sigma = 20.0,       -- shadow softness
+    shadow_color      = 0x000000a0, -- 0xRRGGBBAA
 }
 
 

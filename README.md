@@ -6,10 +6,11 @@ Swindle started as a fork of [dwl](https://codeberg.org/dwl/dwl) with a
 simple idea: make something that feels like Hyprland for people who don't
 want to run Hyprland. Honest status report:
 
-* NO cool vfx (yet)
+* NO cool vfx on main (yet)
 * only ONE tiling layout (dwindle)
 * Lua config that actually hot-reloads
 * dwl IPC plus ext-workspace support
+* eye candy (corners, shadows, fade-in) on the `scenefx` branch
 
 > Fun fact: the ext-workspace bits were borrowed from
 > [MangoWM](https://github.com/mangowm/mango), which is why
@@ -45,6 +46,7 @@ want to run Hyprland. Honest status report:
 | `lua5.4` | the config engine |
 | `libxcb`, `xcb-util-wm` | only for XWayland |
 | `pkg-config` | build time only |
+| `scenefx-0.5` | only for `SCENEFX=1` builds (eye candy) |
 
 If your distro ships separate `-dev`/`-devel` packages, grab those too.
 
@@ -53,6 +55,12 @@ If your distro ships separate `-dev`/`-devel` packages, grab those too.
 ```
 sudo pacman -S base-devel wlroots0.20 wayland wayland-protocols \
   libinput libxkbcommon lua54 libxcb xcb-util-wm pixman libdrm seatd
+```
+
+Eye candy needs one more package (`SCENEFX=1` builds only):
+
+```
+sudo pacman -S scenefx0.5
 ```
 
 **Nix** (there is a flake in the repo):
@@ -143,16 +151,24 @@ If you want finer control, the explicit `inner_border_px`,
 `outer_border_px` and `inner_*_color` / `outer_*_color` keys beat the
 shorthands.
 
-### animations (stub for now)
+### animations (needs a scenefx build)
 
 ```lua
-animations = { enabled = false, corner_radius = 0, fade_ms = 0 }
+animations = {
+    enabled           = true,
+    corner_radius     = 12,
+    fade_in_ms        = 150,
+    shadow_enabled    = true,
+    shadow_blur_sigma = 20.0,
+    shadow_color      = 0x000000a0,
+}
 ```
 
-This is parsed so the option exists when the time comes, but right now it
-does nothing. Real animations are waiting on a
-[scenefx](https://github.com/wlrfx/scenefx) release that works with
-wlroots 0.20. Flipping it on just logs a note saying as much.
+Rounded corners, drop shadows and a short fade-in on map, through
+[scenefx](https://github.com/wlrfx/scenefx) 0.5. Build with `SCENEFX=1`
+in `config.mk` (this branch default) and install the `scenefx-0.5`
+package, e.g. `scenefx0.5` on CachyOS/Arch. Plain `SCENEFX=0` builds
+parse the table but ignore it. Window blur is still to come.
 
 ### input
 
@@ -320,8 +336,9 @@ The full usage lives in [`smsg/README.md`](smsg/README.md).
 - [x] configurable keymap
 - [x] custom config path (`-c`)
 - [x] `/etc/swindle/config.lua` fallback
-- [ ] animations via [scenefx](https://github.com/wlrfx/scenefx) once a
-      wlroots-0.20-compatible release lands (the stub is ready)
+- [x] animations via [scenefx](https://github.com/wlrfx/scenefx) 0.5
+      (rounded corners, shadows, fade-in; lives on the `scenefx` branch,
+      window blur still open)
 - [ ] per-monitor wallpaper / output management helpers
 - [ ] docs site (in planning)
 

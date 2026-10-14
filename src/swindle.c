@@ -47,7 +47,13 @@
 #include <wlr/types/wlr_primary_selection.h>
 #include <wlr/types/wlr_primary_selection_v1.h>
 #include <wlr/types/wlr_relative_pointer_v1.h>
+#ifdef SCENEFX
+#include <scenefx/render/fx_renderer/fx_renderer.h>
+#include <scenefx/types/fx/clipped_region.h>
+#include <scenefx/types/wlr_scene.h>
+#else
 #include <wlr/types/wlr_scene.h>
+#endif
 #include <wlr/types/wlr_screencopy_v1.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/types/wlr_server_decoration.h>
@@ -114,6 +120,11 @@ typedef struct {
 	struct wlr_scene_rect *inner_border[4]; /* inner top, bottom, left, right */
 	struct wlr_scene_rect *outer_border[4]; /* outer top, bottom, left, right */
 	struct wlr_scene_tree *scene_surface;
+#ifdef SCENEFX
+	struct wlr_scene_shadow *shadow;
+	float fx_opacity;
+	struct wl_event_source *fx_fade_timer;
+#endif
 	struct wl_list link;
 	struct wl_list flink;
 	struct wlr_box geom; /* layout-relative, includes border */
@@ -393,6 +404,11 @@ static void setgaps(const Arg *arg);
 static void setmfact(const Arg *arg);
 static void zoom(const Arg *arg);
 static void focusstack(const Arg *arg);
+#ifdef SCENEFX
+static void clientfx_apply(Client *c);
+static void clientfx_reapply_all(void);
+static void clientfx_fade_cancel(Client *c);
+#endif
 static void toggletag(const Arg *arg);
 static void toggleview(const Arg *arg);
 static void unlocksession(struct wl_listener *listener, void *data);
@@ -1553,6 +1569,11 @@ destroynotify(struct wl_listener *listener, void *data)
 		wl_list_remove(&c->unmap.link);
 		wl_list_remove(&c->maximize.link);
 	}
+#ifdef SCENEFX
+	/* The scene node is already gone (unmap), but a fade timer could
+	 * still hold this pointer. Never let it outlive the client. */
+	clientfx_fade_cancel(c);
+#endif
 	free(c);
 }
 
@@ -1773,8 +1794,13 @@ gpureset(struct wl_listener *listener, void *data)
 	struct wlr_renderer *old_drw = drw;
 	struct wlr_allocator *old_alloc = alloc;
 	struct Monitor *m;
+#ifdef SCENEFX
+	if (!(drw = fx_renderer_create(backend)))
+		die("couldn't recreate fx renderer");
+#else
 	if (!(drw = wlr_renderer_autocreate(backend)))
 		die("couldn't recreate renderer");
+#endif
 
 	if (!(alloc = wlr_allocator_autocreate(backend, drw)))
 		die("couldn't recreate allocator");
@@ -2128,6 +2154,139 @@ locksession(struct wl_listener *listener, void *data)
 	wlr_session_lock_v1_send_locked(session_lock);
 }
 
+#ifdef SCENEFX
+/* Eye candy: rounded corners, drop shadows and map fade-in.
+ * Everything below is a no-op unless cfg.animations.enabled,
+ * so plain configs (and SCENEFX=0 builds) behave exactly as before. */
+
+struct FxWalk {
+	float opacity; /* < 0: leave opacity alone */
+	int radius;    /* < 0: leave corners alone */
+};
+
+static void
+clientfx_buffer_iter(struct wlr_scene_buffer *buffer, int sx, int sy, void *data)
+{
+	struct FxWalk *w = data;
+	(void)sx; (void)sy;
+	if (w->opacity >= 0.0f)
+		wlr_scene_buffer_set_opacity(buffer, w->opacity);
+	if (w->radius >= 0)
+		wlr_scene_buffer_set_corner_radii(buffer, corner_radii_all(w->radius));
+}
+
+static void
+clientfx_walk(Client *c, float opacity, int radius)
+{
+	struct FxWalk w = { .opacity = opacity, .radius = radius };
+	if (!c->scene_surface)
+		return;
+	wlr_scene_node_for_each_buffer(&c->scene_surface->node,
+		clientfx_buffer_iter, &w);
+}
+
+static void
+clientfx_fade_cancel(Client *c)
+{
+	if (c->fx_fade_timer) {
+		wl_event_source_remove(c->fx_fade_timer);
+		c->fx_fade_timer = NULL;
+	}
+}
+
+static int
+clientfx_fade_step(void *data)
+{
+	Client *c = data;
+	int ms = cfg.animations.fade_in_ms;
+	if (ms <= 0)
+		ms = 1;
+	c->fx_opacity += 16.0f / (float)ms;
+	if (c->fx_opacity >= 1.0f) {
+		c->fx_opacity = 1.0f;
+		c->fx_fade_timer = NULL;
+		clientfx_walk(c, 1.0f, -1);
+		return 0;
+	}
+	clientfx_walk(c, c->fx_opacity, -1);
+	wl_event_source_timer_update(c->fx_fade_timer, 16);
+	return 0;
+}
+
+static void
+clientfx_shadow_update(Client *c)
+{
+	int w = c->geom.width, h = c->geom.height;
+	float sigma = cfg.animations.shadow_blur_sigma;
+	int r = cfg.animations.corner_radius;
+	int m = (int)sigma;
+
+	if (!cfg.animations.enabled || !cfg.animations.shadow_enabled
+			|| c->isfullscreen || w <= 0 || h <= 0) {
+		if (c->shadow)
+			wlr_scene_node_set_enabled(&c->shadow->node, false);
+		return;
+	}
+	if (!c->shadow) {
+		c->shadow = wlr_scene_shadow_create(c->scene, 10, 10, r,
+			sigma, cfg.animations.shadow_color);
+		if (!c->shadow)
+			return;
+		wlr_scene_node_lower_to_bottom(&c->shadow->node);
+	}
+	wlr_scene_node_set_enabled(&c->shadow->node, true);
+	wlr_scene_shadow_set_size(c->shadow, w + 2 * m, h + 2 * m);
+	wlr_scene_shadow_set_corner_radius(c->shadow, r);
+	wlr_scene_shadow_set_blur_sigma(c->shadow, sigma);
+	wlr_scene_shadow_set_color(c->shadow, cfg.animations.shadow_color);
+	wlr_scene_node_set_position(&c->shadow->node, -m, -m);
+	wlr_scene_shadow_set_clipped_region(c->shadow, (struct clipped_region) {
+		.corners = corner_radii_all(r),
+		.area = { m, m, w, h },
+	});
+}
+
+/* Apply the current animations config to one client. Safe to call from
+ * map/resize/reload paths. */
+static void
+clientfx_apply(Client *c)
+{
+	if (!c->scene)
+		return;
+	if (!cfg.animations.enabled || c->isfullscreen) {
+		clientfx_fade_cancel(c);
+		c->fx_opacity = 1.0f;
+		clientfx_walk(c, 1.0f, 0);
+		if (c->shadow)
+			wlr_scene_node_set_enabled(&c->shadow->node, false);
+		return;
+	}
+	clientfx_walk(c, -1.0f, cfg.animations.corner_radius);
+	clientfx_shadow_update(c);
+	if (cfg.animations.fade_in_ms > 0 && c->fx_opacity < 1.0f
+			&& !c->fx_fade_timer)
+		c->fx_fade_timer = wl_event_loop_add_timer(event_loop,
+			clientfx_fade_step, c);
+}
+
+/* Re-apply after a config hot-reload: finish any in-flight fade instantly
+ * so no timer ever lerps toward a stale target. */
+static void
+clientfx_reapply_all(void)
+{
+	Client *c;
+	wl_list_for_each(c, &clients, link) {
+		if (!c->scene)
+			continue;
+		if (cfg.animations.enabled) {
+			c->fx_opacity = 1.0f;
+			clientfx_fade_cancel(c);
+		}
+		clientfx_apply(c);
+	}
+}
+#endif /* SCENEFX */
+
 void
 mapnotify(struct wl_listener *listener, void *data)
 {
@@ -2170,6 +2329,20 @@ mapnotify(struct wl_listener *listener, void *data)
 				c->isurgent ? cfg.appearance.outer_urgent_color : cfg.appearance.outer_border_color);
 		c->outer_border[i]->node.data = c;
 	}
+
+#ifdef SCENEFX
+	/* Eye candy starts here: start transparent when a fade is configured,
+	 * clientfx_apply() arms the fade timer. Unmanaged clients (menus and
+	 * friends) stay plain so popups never feel laggy. */
+	c->shadow = NULL;
+	c->fx_opacity = 1.0f;
+	c->fx_fade_timer = NULL;
+	if (cfg.animations.enabled && cfg.animations.fade_in_ms > 0) {
+		c->fx_opacity = 0.0f;
+		clientfx_walk(c, 0.0f, cfg.animations.corner_radius);
+	}
+	clientfx_apply(c);
+#endif
 
 	/* Initialize client geometry with room for border */
 	client_set_tiled(c, WLR_EDGE_TOP | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT | WLR_EDGE_RIGHT);
@@ -2680,6 +2853,11 @@ resize(Client *c, struct wlr_box geo, int interact)
 			c->geom.height - 2 * c->bw);
 	client_get_clip(c, &clip);
 	wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip);
+#ifdef SCENEFX
+	/* Window moved or resized: shadow follows, corners re-applied
+	 * (also covers the fullscreen transitions, which go through here). */
+	clientfx_apply(c);
+#endif
 }
 
 void
@@ -2892,6 +3070,9 @@ on_config_reload(const Config *newcfg, void *ud)
 	(void)ud;
 	cfg = *newcfg;
 	keyboard_reload_keymap();
+#ifdef SCENEFX
+	clientfx_reapply_all();
+#endif
 	wl_list_for_each(m, &mons, link)
 		arrange(m);
 	printstatus();
@@ -2966,8 +3147,15 @@ setup(void)
 	 * can also specify a renderer using the WLR_RENDERER env var.
 	 * The renderer is responsible for defining the various pixel formats it
 	 * supports for shared memory, this configures that for clients. */
+#ifdef SCENEFX
+	/* scenefx renders its nodes (shadows, blur) only through its own
+	 * renderer, so plain autocreate is not an option here. */
+	if (!(drw = fx_renderer_create(backend)))
+		die("couldn't create fx renderer (scenefx)");
+#else
 	if (!(drw = wlr_renderer_autocreate(backend)))
 		die("couldn't create renderer");
+#endif
 	wl_signal_add(&drw->events.lost, &gpu_reset);
 
 	/* Create shm, drm and linux_dmabuf interfaces by ourselves.
@@ -3921,6 +4109,10 @@ unmapnotify(struct wl_listener *listener, void *data)
 	}
 
 	wlr_scene_node_destroy(&c->scene->node);
+	c->scene = NULL;
+#ifdef SCENEFX
+	clientfx_fade_cancel(c);
+#endif
 	printstatus();
 	motionnotify(0, NULL, 0, 0, 0, 0);
 }

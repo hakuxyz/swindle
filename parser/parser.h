@@ -64,12 +64,15 @@ typedef struct {
 	char model[64];    /* e.g. "" (default) or "pc105" */
 } CfgKeyboard;
 
-/* Animations (scenefx stub: parsed now, applied once scenefx 0.5 lands) */
+/* Animations (needs a SCENEFX build; plain builds parse but ignore them) */
 
 typedef struct {
-	bool enabled;       /* default false; logs a note while scenefx is absent */
-	int  corner_radius; /* parsed for forward-compat, currently no-op */
-	int  fade_ms;       /* parsed for forward-compat, currently no-op */
+	bool  enabled;        /* master switch, default false */
+	int   corner_radius;  /* rounded window corners in px */
+	int   fade_in_ms;     /* map fade-in duration, 0 = instant */
+	bool  shadow_enabled; /* drop shadow behind windows */
+	float shadow_blur_sigma;
+	float shadow_color[4];
 } CfgAnimations;
 
 /* Window Rules  */

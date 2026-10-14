@@ -3,10 +3,10 @@
 
 include config.mk
 
-DWLCFLAGS = `$(PKG_CONFIG) --cflags $(PKGS)` $(WLR_INCS) \
+DWLCFLAGS = `$(PKG_CONFIG) --cflags $(PKGS)` $(WLR_INCS) $(SFX_INCS) \
 	-I. -Iinclude -Isrc -Iparser -DWLR_USE_UNSTABLE -D_POSIX_C_SOURCE=200809L -DVERSION=\"$(VERSION)\" \
-	$(XWAYLAND) -g -Wall -Wextra -Wno-unused-parameter -O1 -std=c11 $(CFLAGS)
-LDLIBS    = `$(PKG_CONFIG) --libs $(PKGS)` $(WLR_LIBS) -lm $(LIBS)
+	$(XWAYLAND) $(SFX_DEF) -g -Wall -Wextra -Wno-unused-parameter -O1 -std=c11 $(CFLAGS)
+LDLIBS    = `$(PKG_CONFIG) --libs $(PKGS)` $(WLR_LIBS) $(SFX_LIBS) -lm $(LIBS)
 
 SCANNER   = `$(PKG_CONFIG) --variable=wayland_scanner wayland-scanner`
 PROTOCOLS = `$(PKG_CONFIG) --variable=pkgdatadir wayland-protocols`
