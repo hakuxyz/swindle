@@ -3,10 +3,14 @@
 
 include config.mk
 
-DWLCFLAGS = `$(PKG_CONFIG) --cflags $(PKGS)` $(WLR_INCS) $(SFX_INCS) \
+DWLCFLAGS = `$(PKG_CONFIG) --cflags $(PKGS)` $(SFX_INCS) $(WLR_INCS) \
 	-I. -Iinclude -Isrc -Iparser -DWLR_USE_UNSTABLE -D_POSIX_C_SOURCE=200809L -DVERSION=\"$(VERSION)\" \
 	$(XWAYLAND) $(SFX_DEF) -g -Wall -Wextra -Wno-unused-parameter -O1 -std=c11 $(CFLAGS)
-LDLIBS    = `$(PKG_CONFIG) --libs $(PKGS)` $(WLR_LIBS) $(SFX_LIBS) -lm $(LIBS)
+# NOTE: SFX_LIBS must come before WLR_LIBS. Both libraries export the
+# wlr_scene_* symbols and scenefx is a drop-in replacement: the linker
+# binds the first match, so scenefx has to win. Wrong order silently
+# builds a binary that corrupts the heap and segfaults later.
+LDLIBS    = `$(PKG_CONFIG) --libs $(PKGS)` $(SFX_LIBS) $(WLR_LIBS) -lm $(LIBS)
 
 SCANNER   = `$(PKG_CONFIG) --variable=wayland_scanner wayland-scanner`
 PROTOCOLS = `$(PKG_CONFIG) --variable=pkgdatadir wayland-protocols`
