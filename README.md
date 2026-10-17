@@ -48,7 +48,7 @@ want to run Hyprland. Honest status report:
 
 If your distro ships separate `-dev`/`-devel` packages, grab those too.
 
-**CachyOS / Arch** (this is tested and works):
+**Arch** (this is tested and works):
 
 ```
 sudo pacman -S base-devel wlroots0.20 wayland wayland-protocols \
